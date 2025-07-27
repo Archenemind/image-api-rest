@@ -1,3 +1,4 @@
 *.db
 *.mod
 *.sum
+/main/uploads

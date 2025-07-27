@@ -7,7 +7,7 @@ import (
 )
 
 type Image struct {
-	Id, ImageName, Size, Format string
+	Id, Path, ImageName, Size, Format string
 }
 
 func CreateTable(db *sql.DB) (sql.Result, error) {
@@ -22,9 +22,9 @@ func CreateTable(db *sql.DB) (sql.Result, error) {
 }
 
 func InsertImageDB(db *sql.DB, c *Image) (int64, error) {
-	sql := `INSERT INTO images (name, size, format) 
+	sql := `INSERT INTO images (path, name, size, format) 
             VALUES (?, ?, ?);`
-	result, err := db.Exec(sql, c.ImageName, c.Size, c.Format)
+	result, err := db.Exec(sql, c.Path, c.ImageName, c.Size, c.Format)
 	if err != nil {
 		return 0, err
 	}

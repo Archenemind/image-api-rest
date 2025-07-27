@@ -7,10 +7,28 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/glebarez/go-sqlite"
 
+	"api-rest/converts"
 	"api-rest/models"
 	"database/sql"
 	"strconv"
 )
+
+func UploadImage(c *gin.Context) {
+	file, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded"})
+		return
+	}
+
+	// Save file
+	dst := "./uploads/" + file.Filename
+	if err := c.SaveUploadedFile(file, dst); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "File uploaded", "filename": file.Filename})
+}
 
 func PostImages(c *gin.Context) {
 	db, err := sql.Open("sqlite", "./images.db?_pragma=foreign_keys(1)")
@@ -52,7 +70,7 @@ func GetImages(c *gin.Context) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT id, name, size, format FROM images")
+	rows, err := db.Query("SELECT id, path, name, size, format FROM images")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -86,7 +104,7 @@ func GetImageById(c *gin.Context) {
 	defer db.Close()
 
 	var img models.Image
-	sql := `SELECT id, name, size, format FROM images WHERE id = ?;`
+	sql := `SELECT id,path, name, size, format FROM images WHERE id = ?;`
 	row := db.QueryRow(sql, id)
 
 	err = row.Scan(&img.Id, &img.ImageName, &img.Size, &img.Format)
@@ -158,4 +176,35 @@ func DeleteImage(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Image deleted successfully"})
+}
+
+func ConvertImage(c *gin.Context) {
+	file, err := c.FormFile("image")
+	format := c.Request.FormValue("format")
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No file"})
+		return
+	}
+
+	// Save original file
+	inputPath := "./uploads/" + file.Filename
+	if err := c.SaveUploadedFile(file, inputPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Create output filename with new extension
+	outputFilename := file.Filename[:len(file.Filename)-4] + "." + format
+	outputPath := "./uploads/" + outputFilename
+
+	convertErr := converts.ConvertImage(format, inputPath, outputPath)
+
+	if convertErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": convertErr.Error()})
+		return
+	}
+
+	c.Header("Content-Disposition", "attachment; filename="+outputFilename)
+	c.File(outputPath)
 }
