@@ -12,7 +12,6 @@ func main() {
 	router := gin.Default()
 	router.GET("/images", controllers.GetImages)
 	router.GET("/image/:id", controllers.GetImageById)
-	router.POST("/image", controllers.PostImages)
 	router.POST("/upload", controllers.UploadImage)
 	router.POST("/convert", controllers.ConvertImage)
 	router.PUT("/image/:id", controllers.UpdateImage)
