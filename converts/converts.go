@@ -45,3 +45,13 @@ func ConvertImage(format, inputPath, outputPath string) error {
 	// Encode to desired format
 	// or: return png.Encode(outFile, img)
 }
+
+func DeleteImages(paths []string) error {
+	for i := range paths {
+		err := os.Remove(paths[i])
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

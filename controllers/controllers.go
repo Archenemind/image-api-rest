@@ -27,6 +27,25 @@ func UploadImage(c *gin.Context) {
 		return
 	}
 
+	db, err := sql.Open("sqlite", "./images.db?_pragma=foreign_keys(1)")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	models.CreateTable(db)
+
+	defer db.Close()
+
+	var newImage models.Image
+
+	newImage.CompleteImage(dst, file.Filename, strconv.FormatInt(file.Size/1024/1024, 10))
+
+	_, errDB := models.InsertImageDB(db, &newImage)
+	if errDB != nil {
+		c.IndentedJSON(http.StatusInternalServerError, err)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "File uploaded", "filename": file.Filename})
 }
 
@@ -80,7 +99,7 @@ func GetImages(c *gin.Context) {
 	var images []models.Image
 	for rows.Next() {
 		var img models.Image
-		err := rows.Scan(&img.Id, &img.ImageName, &img.Size, &img.Format)
+		err := rows.Scan(&img.Id, &img.Path, &img.ImageName, &img.Size, &img.Format)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -107,7 +126,7 @@ func GetImageById(c *gin.Context) {
 	sql := `SELECT id,path, name, size, format FROM images WHERE id = ?;`
 	row := db.QueryRow(sql, id)
 
-	err = row.Scan(&img.Id, &img.ImageName, &img.Size, &img.Format)
+	err = row.Scan(&img.Id, &img.Path, &img.ImageName, &img.Size, &img.Format)
 
 	if err != nil {
 		if err == row.Err() {
@@ -164,6 +183,19 @@ func DeleteImage(c *gin.Context) {
 	}
 	defer db.Close()
 
+	image := make([]string, 5, 5)
+
+	sql := `SELECT id,path,name,size,format FROM images WHERE id = ?;`
+	row := db.QueryRow(sql, id)
+	row.Scan(&image[0], &image[1], &image[2], &image[3], &image[4])
+
+	fmt.Println(image[1])
+	fmt.Println(image[1:2])
+
+	if converts.DeleteImages(image[1:2]) != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+
 	idDB, _ := strconv.Atoi(id)
 	rowsAffected, errDB := models.DeleteImageDB(db, idDB)
 
@@ -207,4 +239,5 @@ func ConvertImage(c *gin.Context) {
 
 	c.Header("Content-Disposition", "attachment; filename="+outputFilename)
 	c.File(outputPath)
+
 }

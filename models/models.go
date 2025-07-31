@@ -10,9 +10,18 @@ type Image struct {
 	Id, Path, ImageName, Size, Format string
 }
 
+// Fills all the atributes of models.Image
+func (i *Image) CompleteImage(path, imageName, size string) {
+	i.Path = path
+	i.ImageName = imageName
+	i.Size = size + " MB"
+	i.Format = imageName[len(imageName)-3:]
+}
+
 func CreateTable(db *sql.DB) (sql.Result, error) {
 	sql := `CREATE TABLE IF NOT EXISTS images (
         id INTEGER PRIMARY KEY,
+		path TEXT NOT NULL,
         name     TEXT NOT NULL,
         size INTEGER NOT NULL,
         format INTEGER NOT NULL
@@ -23,7 +32,7 @@ func CreateTable(db *sql.DB) (sql.Result, error) {
 
 func InsertImageDB(db *sql.DB, c *Image) (int64, error) {
 	sql := `INSERT INTO images (path, name, size, format) 
-            VALUES (?, ?, ?);`
+            VALUES (?, ?, ?, ?);`
 	result, err := db.Exec(sql, c.Path, c.ImageName, c.Size, c.Format)
 	if err != nil {
 		return 0, err
