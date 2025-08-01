@@ -13,7 +13,7 @@ func main() {
 	router.GET("/images", controllers.GetImages)
 	router.GET("/image/:id", controllers.GetImageById)
 	router.POST("/upload", controllers.UploadImage)
-	router.POST("/convert", controllers.ConvertImage)
+	router.POST("/convert", controllers.ConvertAndDeleteImage)
 	router.PUT("/image/:id", controllers.UpdateImage)
 	router.DELETE("/image/:id", controllers.DeleteImage)
 

@@ -41,12 +41,21 @@ func UploadImage(c *gin.Context) {
 
 	newImage.CompleteImage(dst, file.Filename, strconv.FormatInt(file.Size/1024/1024, 10))
 
-	_, errDB := models.InsertImageDB(db, &newImage)
+	lastId, errDB := models.InsertImageDB(db, &newImage)
 	if errDB != nil {
 		c.IndentedJSON(http.StatusInternalServerError, err)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "File uploaded", "filename": file.Filename})
+	dst = dst[0:10] + strconv.FormatInt(lastId, 10) + "&" + file.Filename
+	if err := c.SaveUploadedFile(file, dst); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	sql := `UPDATE images SET path = ? WHERE id = ?;`
+	db.Exec(sql, dst, lastId)
+
+	c.JSON(http.StatusOK, gin.H{"message": "File uploaded", "filename": file.Filename, "path": dst})
 }
 
 func PostImages(c *gin.Context) {
@@ -183,16 +192,13 @@ func DeleteImage(c *gin.Context) {
 	}
 	defer db.Close()
 
-	image := make([]string, 5, 5)
+	var path string
 
-	sql := `SELECT id,path,name,size,format FROM images WHERE id = ?;`
+	sql := `SELECT path FROM images WHERE id = ?;`
 	row := db.QueryRow(sql, id)
-	row.Scan(&image[0], &image[1], &image[2], &image[3], &image[4])
+	row.Scan(&path)
 
-	fmt.Println(image[1])
-	fmt.Println(image[1:2])
-
-	if converts.DeleteImages(image[1:2]) != nil {
+	if converts.DeleteImages([]string{path}) != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 
@@ -210,7 +216,7 @@ func DeleteImage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Image deleted successfully"})
 }
 
-func ConvertImage(c *gin.Context) {
+func ConvertAndDeleteImage(c *gin.Context) {
 	file, err := c.FormFile("image")
 	format := c.Request.FormValue("format")
 
@@ -240,4 +246,5 @@ func ConvertImage(c *gin.Context) {
 	c.Header("Content-Disposition", "attachment; filename="+outputFilename)
 	c.File(outputPath)
 
+	converts.DeleteImages([]string{inputPath, outputPath})
 }
