@@ -151,8 +151,10 @@ func GetImageById(c *gin.Context) {
 	c.JSON(http.StatusOK, img)
 }
 
+// Changes the format of the existing images
 func UpdateImage(c *gin.Context) {
 	id := c.Param("id")
+
 	var req map[string]string
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -167,9 +169,35 @@ func UpdateImage(c *gin.Context) {
 	}
 	defer db.Close()
 
+	var image models.Image
+	row := db.QueryRow("SELECT path, name, size, format FROM images WHERE id = ?;", id)
+	row.Scan(&image.Path, &image.ImageName, &image.Size, &image.Format)
+
+	if req["Format"] != image.Format {
+		err = converts.ConvertImage(image.Path[len(image.Path)-3:], req["Format"],
+			image.Path, image.Path[:len(image.Path)-3]+req["Format"])
+
+		converts.DeleteImages([]string{image.Path})
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+
+		}
+
+		image.Path = image.Path[:len(image.Path)-3] + req["Format"]
+	}
+	newPath := image.Path[:10] + id + "&" + req["Name"] + "." + req["Format"]
+
+	converts.ChangeFileName(image.Path, newPath)
+
+	fileSize := converts.GetFileSize(newPath)
+
 	req["id"] = id
 	idDB, _ := strconv.Atoi(id)
-	rowsAffected, errDB := models.UpdateImageDB(db, idDB, req["Size"], req["Name"], req["Format"])
+	rowsAffected, errDB := models.UpdateImageDB(db, idDB,
+		newPath, strconv.FormatFloat(float64(fileSize), 'f', 1, 32)+" MB",
+		req["Name"], req["Format"])
 
 	if errDB != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errDB.Error()})
@@ -213,7 +241,7 @@ func DeleteImage(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Image deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "image deleted successfully"})
 }
 
 func ConvertAndDeleteImage(c *gin.Context) {
@@ -236,7 +264,8 @@ func ConvertAndDeleteImage(c *gin.Context) {
 	outputFilename := file.Filename[:len(file.Filename)-4] + "." + format
 	outputPath := "./uploads/" + outputFilename
 
-	convertErr := converts.ConvertImage(format, inputPath, outputPath)
+	convertErr := converts.ConvertImage(file.Filename[len(file.Filename)-3:],
+		format, inputPath, outputPath)
 
 	if convertErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": convertErr.Error()})

@@ -9,7 +9,7 @@ import (
 	"github.com/nickalie/go-webpbin"
 )
 
-func ConvertImage(format, inputPath, outputPath string) error {
+func ConvertImage(inputFormat, outputFormat, inputPath, outputPath string) error {
 	// Open input file
 	file, err := os.Open(inputPath)
 	if err != nil {
@@ -30,7 +30,7 @@ func ConvertImage(format, inputPath, outputPath string) error {
 	}
 	defer outFile.Close()
 
-	switch format {
+	switch outputFormat {
 	case "png":
 		return png.Encode(outFile, img)
 	case "jpeg":
@@ -54,4 +54,14 @@ func DeleteImages(paths []string) error {
 		}
 	}
 	return nil
+}
+
+func GetFileSize(path string) float32 {
+	fileInfo, _ := os.Stat(path)
+
+	return float32(fileInfo.Size()) / 1024 / 1024
+}
+
+func ChangeFileName(oldPath, newPath string) {
+	os.Rename(oldPath, newPath)
 }

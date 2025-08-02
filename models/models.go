@@ -40,9 +40,9 @@ func InsertImageDB(db *sql.DB, c *Image) (int64, error) {
 	return result.LastInsertId()
 }
 
-func UpdateImageDB(db *sql.DB, id int, size, name, format string) (int64, error) {
-	sql := `UPDATE images SET name = ?, size = ?, format = ? WHERE id = ?;`
-	result, err := db.Exec(sql, name, size, format, id)
+func UpdateImageDB(db *sql.DB, id int, path, size, name, format string) (int64, error) {
+	sql := `UPDATE images SET path = ?,name = ?, size = ?, format = ? WHERE id = ?;`
+	result, err := db.Exec(sql, path, name, size, format, id)
 	if err != nil {
 		return 0, err
 	}
