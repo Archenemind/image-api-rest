@@ -17,10 +17,17 @@ func ConvertImage(inputFormat, outputFormat, inputPath, outputPath string) error
 	}
 	defer file.Close()
 
-	// Decode image (auto-detects format)
-	img, _, err := image.Decode(file)
-	if err != nil {
-		return err
+	var img image.Image
+
+	switch inputFormat {
+	case "jpg":
+		img, _, _ = image.Decode(file)
+	case "jpeg":
+		img, _, _ = image.Decode(file)
+	case "png":
+		img, _, _ = image.Decode(file)
+	case "webp":
+		img, _ = webpbin.Decode(file)
 	}
 
 	// Create output file

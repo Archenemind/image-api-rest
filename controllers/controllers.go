@@ -173,7 +173,7 @@ func UpdateImage(c *gin.Context) {
 	row := db.QueryRow("SELECT path, name, size, format FROM images WHERE id = ?;", id)
 	row.Scan(&image.Path, &image.ImageName, &image.Size, &image.Format)
 
-	if req["Format"] != image.Format {
+	if req["Format"] != image.Format && image.Format != "webp" {
 		err = converts.ConvertImage(image.Path[len(image.Path)-3:], req["Format"],
 			image.Path, image.Path[:len(image.Path)-3]+req["Format"])
 
@@ -182,10 +182,23 @@ func UpdateImage(c *gin.Context) {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
-
 		}
 
 		image.Path = image.Path[:len(image.Path)-3] + req["Format"]
+
+	} else if req["Format"] != image.Format && image.Format == "webp" {
+		err = converts.ConvertImage(image.Format, req["Format"],
+			image.Path, image.Path[:len(image.Path)-4]+req["Format"])
+
+		converts.DeleteImages([]string{image.Path})
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		image.Path = image.Path[:len(image.Path)-4] + req["Format"]
+
 	}
 	newPath := image.Path[:10] + id + "&" + req["Name"] + "." + req["Format"]
 
