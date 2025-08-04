@@ -128,6 +128,8 @@ func GetImageById(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, img)
+	c.JSON(http.StatusOK, gin.H{
+		"base64 image": converts.ConvertImageToBase64(img.Path, img.Format)})
 }
 
 // Changes the format of the existing images
