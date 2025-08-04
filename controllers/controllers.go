@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -33,7 +32,12 @@ func UploadImage(c *gin.Context) {
 		return
 	}
 
-	models.CreateTable(db)
+	_, err = models.CreateTable(db)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating DB"})
+		return
+	}
 
 	defer db.Close()
 
@@ -52,42 +56,9 @@ func UploadImage(c *gin.Context) {
 		return
 	}
 
-	sql := `UPDATE images SET path = ? WHERE id = ?;`
-	db.Exec(sql, dst, lastId)
+	db.Exec(`UPDATE images SET path = ? WHERE id = ?;`, dst, lastId)
 
-	c.JSON(http.StatusOK, gin.H{"message": "File uploaded", "filename": file.Filename, "path": dst})
-}
-
-func PostImages(c *gin.Context) {
-	db, err := sql.Open("sqlite", "./images.db?_pragma=foreign_keys(1)")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	models.CreateTable(db)
-
-	defer db.Close()
-
-	var newImage models.Image
-
-	// Call BindJSON to bind the received JSON to
-	// newAlbum.
-	if err := c.BindJSON(&newImage); err != nil {
-		return
-	}
-
-	id, errDB := models.InsertImageDB(db, &newImage)
-
-	if errDB != nil {
-		c.IndentedJSON(http.StatusNotAcceptable, err)
-	}
-
-	newImage.Id = strconv.Itoa(int(id))
-	c.IndentedJSON(http.StatusCreated, newImage)
-	// Add the new album to the slice.
-	// images.Images = append(images.Images, newImage)
-	// c.IndentedJSON(http.StatusCreated, newImage)
+	c.JSON(http.StatusCreated, gin.H{"message": "File uploaded", "filename": file.Filename, "path": dst, "id": lastId})
 }
 
 func GetImages(c *gin.Context) {
@@ -98,7 +69,7 @@ func GetImages(c *gin.Context) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT id, path, name, size, format FROM images")
+	rows, err := db.Query(`SELECT id, path, name, size, format FROM images`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -108,7 +79,8 @@ func GetImages(c *gin.Context) {
 	var images []models.Image
 	for rows.Next() {
 		var img models.Image
-		err := rows.Scan(&img.Id, &img.Path, &img.ImageName, &img.Size, &img.Format)
+		err := rows.Scan(&img.Id, &img.Path,
+			&img.ImageName, &img.Size, &img.Format)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -170,33 +142,40 @@ func UpdateImage(c *gin.Context) {
 	defer db.Close()
 
 	var image models.Image
-	row := db.QueryRow("SELECT path, name, size, format FROM images WHERE id = ?;", id)
+	query := `SELECT path, name, size, format FROM images WHERE id = ?;`
+	row := db.QueryRow(query, id)
 	row.Scan(&image.Path, &image.ImageName, &image.Size, &image.Format)
 
-	if req["Format"] != image.Format && image.Format != "webp" {
+	if req["Format"] != image.Format &&
+		image.Format != "webp" && image.Format != "avif" {
 		err = converts.ConvertImage(image.Path[len(image.Path)-3:], req["Format"],
 			image.Path, image.Path[:len(image.Path)-3]+req["Format"])
 
-		converts.DeleteImages([]string{image.Path})
-
 		if err != nil {
+			image.Path = image.Path[:len(image.Path)-3] + req["Format"]
+			converts.DeleteImages([]string{image.Path})
+
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-
+		converts.DeleteImages([]string{image.Path})
 		image.Path = image.Path[:len(image.Path)-3] + req["Format"]
 
-	} else if req["Format"] != image.Format && image.Format == "webp" {
+	} else if req["Format"] != image.Format &&
+		(image.Format == "webp" || image.Format == "avif") {
+
 		err = converts.ConvertImage(image.Format, req["Format"],
 			image.Path, image.Path[:len(image.Path)-4]+req["Format"])
 
-		converts.DeleteImages([]string{image.Path})
-
 		if err != nil {
+			image.Path = image.Path[:len(image.Path)-4] + req["Format"]
+			converts.DeleteImages([]string{image.Path})
+
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
+		converts.DeleteImages([]string{image.Path})
 		image.Path = image.Path[:len(image.Path)-4] + req["Format"]
 
 	}
@@ -235,8 +214,7 @@ func DeleteImage(c *gin.Context) {
 
 	var path string
 
-	sql := `SELECT path FROM images WHERE id = ?;`
-	row := db.QueryRow(sql, id)
+	row := db.QueryRow(`SELECT path FROM images WHERE id = ?;`, id)
 	row.Scan(&path)
 
 	if converts.DeleteImages([]string{path}) != nil {

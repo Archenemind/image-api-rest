@@ -1,15 +1,21 @@
 package converts
 
 import (
+	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
 	"os"
 
-	"github.com/nickalie/go-webpbin"
+	cgo_avif "github.com/Kagami/go-avif" // This is the one that requires Visual Studio, vcpkg and a bunch of other stuff, delete this one if it runs out of space
+	"github.com/chai2010/webp"
+	"github.com/gen2brain/avif"
 )
 
 func ConvertImage(inputFormat, outputFormat, inputPath, outputPath string) error {
+
+	fmt.Println(inputFormat, outputFormat, inputPath, outputPath)
+
 	// Open input file
 	file, err := os.Open(inputPath)
 	if err != nil {
@@ -27,7 +33,9 @@ func ConvertImage(inputFormat, outputFormat, inputPath, outputPath string) error
 	case "png":
 		img, _, _ = image.Decode(file)
 	case "webp":
-		img, _ = webpbin.Decode(file)
+		img, _ = webp.Decode(file)
+	case "avif":
+		img, _ = avif.Decode(file)
 	}
 
 	// Create output file
@@ -45,9 +53,17 @@ func ConvertImage(inputFormat, outputFormat, inputPath, outputPath string) error
 	case "jpg":
 		return jpeg.Encode(outFile, img, &jpeg.Options{Quality: 100})
 	case "webp":
-		return webpbin.Encode(outFile, img)
+		return webp.Encode(outFile, img, &webp.Options{
+			Lossless: true,
+			Quality:  100,
+		})
+	case "avif":
+		return cgo_avif.Encode(outFile, img, nil)
+		// return avif.Encode(outFile, img, avif.Options{
+		// 	Quality: 100,
+		// })
 	default:
-		return nil
+		return fmt.Errorf("unsupported output format: %s", outputFormat)
 	}
 	// Encode to desired format
 	// or: return png.Encode(outFile, img)
