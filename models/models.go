@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"fmt"
 
 	_ "github.com/glebarez/go-sqlite"
 )
@@ -11,11 +12,27 @@ type Image struct {
 }
 
 // Fills all the atributes of models.Image
-func (i *Image) CompleteImage(path, imageName, size string) {
+func (i *Image) CompleteImage(path, imageName, size string) error {
+	var err error
+
 	i.Path = path
 	i.ImageName = imageName
 	i.Size = size + " MB"
-	i.Format = imageName[len(imageName)-3:]
+	i.Format, err = FindFormat(imageName)
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func FindFormat(imageName string) (string, error) {
+	for i, v := range imageName {
+		if v == '.' {
+			return imageName[i+1:], nil
+		}
+	}
+	return "error", fmt.Errorf("no dot in the file name")
 }
 
 func CreateTable(db *sql.DB) (sql.Result, error) {

@@ -19,6 +19,13 @@ func UploadImage(c *gin.Context) {
 		return
 	}
 
+	format, _ := models.FindFormat(file.Filename)
+
+	if format != "png" && format != "jpg" && format != "webp" &&
+		format != "avif" {
+		c.JSON(http.StatusNotAcceptable, gin.H{"error": "the file is not an allowed image format"})
+		return
+	}
 	// Save file
 	dst := "./uploads/" + file.Filename
 	if err := c.SaveUploadedFile(file, dst); err != nil {
@@ -237,26 +244,34 @@ func DeleteImage(c *gin.Context) {
 
 func ConvertAndDeleteImage(c *gin.Context) {
 	file, err := c.FormFile("image")
-	format := c.Request.FormValue("format")
+	requestedFormat := c.Request.FormValue("format")
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No file"})
 		return
 	}
 
+	fileFormat, _ := models.FindFormat(file.Filename)
+
+	if fileFormat != "png" && fileFormat != "jpg" && fileFormat != "webp" &&
+		fileFormat != "avif" {
+		c.JSON(http.StatusNotAcceptable, gin.H{"error": "the file is not an allowed image format"})
+		return
+	}
+
 	// Save original file
-	inputPath := "./uploads/" + file.Filename
+	inputPath := "./temporal/" + file.Filename
 	if err := c.SaveUploadedFile(file, inputPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Create output filename with new extension
-	outputFilename := file.Filename[:len(file.Filename)-4] + "." + format
-	outputPath := "./uploads/" + outputFilename
+	outputFilename := file.Filename[:len(file.Filename)-4] + "." + requestedFormat
+	outputPath := "./temporal/" + outputFilename
 
 	convertErr := converts.ConvertImage(file.Filename[len(file.Filename)-3:],
-		format, inputPath, outputPath)
+		requestedFormat, inputPath, outputPath)
 
 	if convertErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": convertErr.Error()})

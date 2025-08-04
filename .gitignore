@@ -1,8 +1,9 @@
 *.db
-*.mod
-*.sum
+# *.mod
+# *.sum
 /main/uploads
 .vscode
 /main/.bin
 *.dll
 *.exe
+/temporal
