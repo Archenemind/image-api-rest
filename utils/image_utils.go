@@ -1,4 +1,4 @@
-package converts
+package utils
 
 import (
 	"fmt"
@@ -8,11 +8,13 @@ import (
 	"os"
 
 	cgo_avif "github.com/Kagami/go-avif" // This is the one that requires Visual Studio, vcpkg and a bunch of other stuff, delete this one if it runs out of space
-	"github.com/chai2010/webp"
+
+	"github.com/chai2010/webp" // delete if you don't want to use C compiler
 	"github.com/gen2brain/avif"
 
 	"bytes"
 	"encoding/base64"
+	//	"github.com/nickalie/go-webpbin"  for webp without C compiler
 )
 
 func ConvertImage(inputFormat, outputFormat, inputPath, outputPath string) error {

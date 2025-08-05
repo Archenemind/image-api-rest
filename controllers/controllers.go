@@ -6,10 +6,11 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/glebarez/go-sqlite"
 
-	"api-rest/converts"
-	"api-rest/models"
 	"database/sql"
 	"strconv"
+
+	"github.com/Archenemind/api-rest/models"
+	"github.com/Archenemind/api-rest/utils"
 )
 
 func UploadImage(c *gin.Context) {
@@ -39,7 +40,7 @@ func UploadImage(c *gin.Context) {
 		return
 	}
 
-	_, err = models.CreateTable(db)
+	_, err = models.CreateTables(db)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating DB"})
@@ -54,7 +55,8 @@ func UploadImage(c *gin.Context) {
 
 	lastId, errDB := models.InsertImageDB(db, &newImage)
 	if errDB != nil {
-		c.IndentedJSON(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errDB.Error()})
+		return
 	}
 
 	dst = dst[0:10] + strconv.FormatInt(lastId, 10) + "&" + file.Filename
@@ -129,7 +131,7 @@ func GetImageById(c *gin.Context) {
 
 	c.JSON(http.StatusOK, img)
 	c.JSON(http.StatusOK, gin.H{
-		"base64 image": converts.ConvertImageToBase64(img.Path, img.Format)})
+		"base64 image": utils.ConvertImageToBase64(img.Path, img.Format)})
 }
 
 // Changes the format of the existing images
@@ -153,46 +155,49 @@ func UpdateImage(c *gin.Context) {
 	var image models.Image
 	query := `SELECT path, name, size, format FROM images WHERE id = ?;`
 	row := db.QueryRow(query, id)
-	row.Scan(&image.Path, &image.ImageName, &image.Size, &image.Format)
+
+	if err := row.Scan(&image.Path, &image.ImageName, &image.Size, &image.Format); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "image not found"})
+	}
 
 	if req["Format"] != image.Format &&
 		image.Format != "webp" && image.Format != "avif" {
-		err = converts.ConvertImage(image.Path[len(image.Path)-3:], req["Format"],
+		err = utils.ConvertImage(image.Path[len(image.Path)-3:], req["Format"],
 			image.Path, image.Path[:len(image.Path)-3]+req["Format"])
 
 		if err != nil {
 			image.Path = image.Path[:len(image.Path)-3] + req["Format"]
-			converts.DeleteImages([]string{image.Path})
+			utils.DeleteImages([]string{image.Path})
 
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		converts.DeleteImages([]string{image.Path})
+		utils.DeleteImages([]string{image.Path})
 		image.Path = image.Path[:len(image.Path)-3] + req["Format"]
 
 	} else if req["Format"] != image.Format &&
 		(image.Format == "webp" || image.Format == "avif") {
 
-		err = converts.ConvertImage(image.Format, req["Format"],
+		err = utils.ConvertImage(image.Format, req["Format"],
 			image.Path, image.Path[:len(image.Path)-4]+req["Format"])
 
 		if err != nil {
 			image.Path = image.Path[:len(image.Path)-4] + req["Format"]
-			converts.DeleteImages([]string{image.Path})
+			utils.DeleteImages([]string{image.Path})
 
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		converts.DeleteImages([]string{image.Path})
+		utils.DeleteImages([]string{image.Path})
 		image.Path = image.Path[:len(image.Path)-4] + req["Format"]
 
 	}
 	newPath := image.Path[:10] + id + "&" + req["Name"] + "." + req["Format"]
 
-	converts.ChangeFileName(image.Path, newPath)
+	utils.ChangeFileName(image.Path, newPath)
 
-	fileSize := converts.GetFileSize(newPath)
+	fileSize := utils.GetFileSize(newPath)
 
 	req["id"] = id
 	idDB, _ := strconv.Atoi(id)
@@ -226,7 +231,7 @@ func DeleteImage(c *gin.Context) {
 	row := db.QueryRow(`SELECT path FROM images WHERE id = ?;`, id)
 	row.Scan(&path)
 
-	if converts.DeleteImages([]string{path}) != nil {
+	if utils.DeleteImages([]string{path}) != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 
@@ -272,7 +277,7 @@ func ConvertAndDeleteImage(c *gin.Context) {
 	outputFilename := file.Filename[:len(file.Filename)-4] + "." + requestedFormat
 	outputPath := "./temporal/" + outputFilename
 
-	convertErr := converts.ConvertImage(file.Filename[len(file.Filename)-3:],
+	convertErr := utils.ConvertImage(file.Filename[len(file.Filename)-3:],
 		requestedFormat, inputPath, outputPath)
 
 	if convertErr != nil {
@@ -283,5 +288,5 @@ func ConvertAndDeleteImage(c *gin.Context) {
 	c.Header("Content-Disposition", "attachment; filename="+outputFilename)
 	c.File(outputPath)
 
-	converts.DeleteImages([]string{inputPath, outputPath})
+	utils.DeleteImages([]string{inputPath, outputPath})
 }
