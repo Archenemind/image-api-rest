@@ -130,3 +130,9 @@ func GetFileSize(path string) float32 {
 func ChangeFileName(oldPath, newPath string) {
 	os.Rename(oldPath, newPath)
 }
+
+func CreateDirectoryIfNotExists(path string) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		os.Mkdir(path, os.ModePerm)
+	}
+}

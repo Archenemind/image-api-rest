@@ -27,6 +27,7 @@ func UploadImage(c *gin.Context) {
 		c.JSON(http.StatusNotAcceptable, gin.H{"error": "the file is not an allowed image format"})
 		return
 	}
+	utils.CreateDirectoryIfNotExists("/uploads")
 	// Save file
 	dst := "./uploads/" + file.Filename
 	if err := c.SaveUploadedFile(file, dst); err != nil {
@@ -266,6 +267,7 @@ func ConvertAndDeleteImage(c *gin.Context) {
 		return
 	}
 
+	utils.CreateDirectoryIfNotExists("/temporal")
 	// Save original file
 	inputPath := "./temporal/" + file.Filename
 	if err := c.SaveUploadedFile(file, inputPath); err != nil {
