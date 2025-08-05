@@ -9,8 +9,8 @@ import (
 	"database/sql"
 	"strconv"
 
-	"github.com/Archenemind/api-rest/models"
-	"github.com/Archenemind/api-rest/utils"
+	"github.com/Archenemind/image-api-rest/models"
+	"github.com/Archenemind/image-api-rest/utils"
 )
 
 func UploadImage(c *gin.Context) {

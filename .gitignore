@@ -1,7 +1,7 @@
 *.db
-/main/uploads
+/uploads
 .vscode
 /main/.bin
 *.dll
 *.exe
-/main/temporal
+/temporal
