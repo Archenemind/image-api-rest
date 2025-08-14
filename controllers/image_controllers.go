@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,10 @@ import (
 
 func UploadImage(c *gin.Context) {
 	file, err := c.FormFile("image")
+	userIdF := c.Keys["user_id"].(float64)
+	userIdInt := int(userIdF)
+	userId := strconv.Itoa(userIdInt)
+
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded"})
 		return
@@ -28,12 +33,13 @@ func UploadImage(c *gin.Context) {
 		return
 	}
 	utils.CreateDirectoryIfNotExists("/uploads")
+	utils.CreateDirectoryIfNotExists("/uploads/" + userId)
 	// Save file
-	dst := "./uploads/" + file.Filename
-	if err := c.SaveUploadedFile(file, dst); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+	dst := "./uploads/" + userId + "/" + file.Filename
+	// if err := c.SaveUploadedFile(file, dst); err != nil {
+	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	// 	return
+	// }
 
 	db, err := sql.Open("sqlite", "./images.db?_pragma=foreign_keys(1)")
 	if err != nil {
@@ -52,23 +58,25 @@ func UploadImage(c *gin.Context) {
 
 	var newImage models.Image
 
-	newImage.CompleteImage(dst, file.Filename, strconv.FormatInt(file.Size/1024/1024, 10))
+	newImage.FillAttributes(dst, file.Filename, strconv.FormatInt(file.Size/1024/1024, 10), userId)
 
-	lastId, errDB := models.InsertImageDB(db, &newImage)
+	imageId, errDB := models.InsertImageDB(db, &newImage)
 	if errDB != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errDB.Error()})
 		return
 	}
 
-	dst = dst[0:10] + strconv.FormatInt(lastId, 10) + "&" + file.Filename
+	fmt.Println(utils.CountDigits(userIdInt))
+
+	dst = dst[0:10+utils.CountDigits(userIdInt)+1] + strconv.FormatInt(imageId, 10) + "&" + file.Filename
 	if err := c.SaveUploadedFile(file, dst); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	db.Exec(`UPDATE images SET path = ? WHERE id = ?;`, dst, lastId)
+	db.Exec(`UPDATE images SET path = ? WHERE id = ?;`, dst, imageId)
 
-	c.JSON(http.StatusCreated, gin.H{"message": "File uploaded", "filename": file.Filename, "path": dst, "id": lastId})
+	c.JSON(http.StatusCreated, gin.H{"message": "File uploaded", "filename": file.Filename, "path": dst, "id": imageId})
 }
 
 func GetImages(c *gin.Context) {
@@ -79,7 +87,7 @@ func GetImages(c *gin.Context) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query(`SELECT id, path, name, size, format FROM images`)
+	rows, err := db.Query(`SELECT id, path, name, size, format,user_id FROM images`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -90,7 +98,7 @@ func GetImages(c *gin.Context) {
 	for rows.Next() {
 		var img models.Image
 		err := rows.Scan(&img.Id, &img.Path,
-			&img.ImageName, &img.Size, &img.Format)
+			&img.ImageName, &img.Size, &img.Format, &img.UserId)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -114,10 +122,18 @@ func GetImageById(c *gin.Context) {
 	defer db.Close()
 
 	var img models.Image
-	sql := `SELECT id,path, name, size, format FROM images WHERE id = ?;`
+	sql := `SELECT id,path, name, size, format, user_id FROM images WHERE id = ?;`
 	row := db.QueryRow(sql, id)
 
-	err = row.Scan(&img.Id, &img.Path, &img.ImageName, &img.Size, &img.Format)
+	err = row.Scan(&img.Id, &img.Path, &img.ImageName, &img.Size, &img.Format, &img.UserId)
+
+	userIdF := c.Keys["user_id"].(float64)
+	userIdInt := int(userIdF)
+	userId := strconv.Itoa(userIdInt)
+	if userId != img.UserId && c.Keys["role"] == "client" {
+		c.JSON(http.StatusForbidden, gin.H{"message": "you are not allowed to see this image"})
+		return
+	}
 
 	if err != nil {
 		if err == row.Err() {
@@ -139,9 +155,9 @@ func GetImageById(c *gin.Context) {
 func UpdateImage(c *gin.Context) {
 	id := c.Param("id")
 
-	var req map[string]string
+	var updateRequest models.UpdateImgReq
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindJSON(&updateRequest); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -161,29 +177,37 @@ func UpdateImage(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"message": "image not found"})
 	}
 
-	if req["Format"] != image.Format &&
+	userIdF := c.Keys["user_id"].(float64)
+	userIdInt := int(userIdF)
+	userId := strconv.Itoa(userIdInt)
+	if userId != image.UserId {
+		c.JSON(http.StatusForbidden, gin.H{"message": "you are not allowed to see this image"})
+		return
+	}
+
+	if updateRequest.Format != image.Format &&
 		image.Format != "webp" && image.Format != "avif" {
-		err = utils.ConvertImage(image.Path[len(image.Path)-3:], req["Format"],
-			image.Path, image.Path[:len(image.Path)-3]+req["Format"])
+		err = utils.ConvertImage(image.Path[len(image.Path)-3:], updateRequest.Format,
+			image.Path, image.Path[:len(image.Path)-3]+updateRequest.Format)
 
 		if err != nil {
-			image.Path = image.Path[:len(image.Path)-3] + req["Format"]
+			image.Path = image.Path[:len(image.Path)-3] + updateRequest.Format
 			utils.DeleteImages([]string{image.Path})
 
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		utils.DeleteImages([]string{image.Path})
-		image.Path = image.Path[:len(image.Path)-3] + req["Format"]
+		image.Path = image.Path[:len(image.Path)-3] + updateRequest.Format
 
-	} else if req["Format"] != image.Format &&
+	} else if updateRequest.Format != image.Format &&
 		(image.Format == "webp" || image.Format == "avif") {
 
-		err = utils.ConvertImage(image.Format, req["Format"],
-			image.Path, image.Path[:len(image.Path)-4]+req["Format"])
+		err = utils.ConvertImage(image.Format, updateRequest.Format,
+			image.Path, image.Path[:len(image.Path)-4]+updateRequest.Format)
 
 		if err != nil {
-			image.Path = image.Path[:len(image.Path)-4] + req["Format"]
+			image.Path = image.Path[:len(image.Path)-4] + updateRequest.Format
 			utils.DeleteImages([]string{image.Path})
 
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -191,20 +215,19 @@ func UpdateImage(c *gin.Context) {
 		}
 
 		utils.DeleteImages([]string{image.Path})
-		image.Path = image.Path[:len(image.Path)-4] + req["Format"]
+		image.Path = image.Path[:len(image.Path)-4] + updateRequest.Format
 
 	}
-	newPath := image.Path[:10] + id + "&" + req["Name"] + "." + req["Format"]
+	newPath := image.Path[:10] + id + "&" + updateRequest.Name + "." + updateRequest.Format
 
 	utils.ChangeFileName(image.Path, newPath)
 
 	fileSize := utils.GetFileSize(newPath)
 
-	req["id"] = id
 	idDB, _ := strconv.Atoi(id)
 	rowsAffected, errDB := models.UpdateImageDB(db, idDB,
 		newPath, strconv.FormatFloat(float64(fileSize), 'f', 1, 32)+" MB",
-		req["Name"], req["Format"])
+		updateRequest.Name, updateRequest.Format)
 
 	if errDB != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": errDB.Error()})
@@ -214,7 +237,10 @@ func UpdateImage(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Image updated successfully", "result": req})
+	image.FillAttributes(newPath, updateRequest.Name,
+		strconv.FormatFloat(float64(fileSize), 'f', 1, 32), userId)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Image updated successfully", "result": image})
 }
 
 func DeleteImage(c *gin.Context) {

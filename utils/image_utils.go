@@ -1,20 +1,16 @@
 package utils
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
 	"os"
 
-	cgo_avif "github.com/Kagami/go-avif" // This is the one that requires Visual Studio, vcpkg and a bunch of other stuff, delete this one if it runs out of space
-
-	"github.com/chai2010/webp" // delete if you don't want to use C compiler
+	"github.com/chai2010/webp"
 	"github.com/gen2brain/avif"
-
-	"bytes"
-	"encoding/base64"
-	//	"github.com/nickalie/go-webpbin"  for webp without C compiler
 )
 
 func ConvertImage(inputFormat, outputFormat, inputPath, outputPath string) error {
@@ -63,7 +59,7 @@ func ConvertImage(inputFormat, outputFormat, inputPath, outputPath string) error
 			Quality:  100,
 		})
 	case "avif":
-		return cgo_avif.Encode(outFile, img, nil)
+		return avif.Encode(outFile, img)
 		// return avif.Encode(outFile, img, avif.Options{
 		// 	Quality: 100,
 		// })
@@ -119,20 +115,4 @@ func DeleteImages(paths []string) error {
 		}
 	}
 	return nil
-}
-
-func GetFileSize(path string) float32 {
-	fileInfo, _ := os.Stat(path)
-
-	return float32(fileInfo.Size()) / 1024 / 1024
-}
-
-func ChangeFileName(oldPath, newPath string) {
-	os.Rename(oldPath, newPath)
-}
-
-func CreateDirectoryIfNotExists(path string) {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		os.Mkdir(path, os.ModePerm)
-	}
 }

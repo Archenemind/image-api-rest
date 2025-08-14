@@ -8,18 +8,23 @@ import (
 )
 
 type Image struct {
-	Id, Path, ImageName, Size, Format string
+	Id, Path, ImageName, Size, Format, UserId string
+}
+
+type UpdateImgReq struct {
+	Name   string `json:"name" binding:"required"`
+	Format string `json:"format" binding:"required"`
 }
 
 // Fills all the atributes of models.Image
-func (i *Image) CompleteImage(path, imageName, size string) error {
+func (i *Image) FillAttributes(path, imageName, size, userId string) error {
 	var err error
 
 	i.Path = path
 	i.ImageName = imageName
 	i.Size = size + " MB"
 	i.Format, err = FindFormat(imageName)
-
+	i.UserId = userId
 	if err != nil {
 		return err
 	}
@@ -27,18 +32,25 @@ func (i *Image) CompleteImage(path, imageName, size string) error {
 }
 
 func FindFormat(imageName string) (string, error) {
+	index := -1
 	for i, v := range imageName {
 		if v == '.' {
-			return imageName[i+1:], nil
+			index = i
+			//return imageName[i+1:], nil
 		}
 	}
-	return "error", fmt.Errorf("no dot in the file name")
+
+	if index == -1 {
+		return "error", fmt.Errorf("no dot in the file name: %s", imageName)
+	}
+
+	return imageName[index+1:], nil
 }
 
-func InsertImageDB(db *sql.DB, c *Image) (int64, error) {
-	sql := `INSERT INTO images (path, name, size, format) 
-            VALUES (?, ?, ?, ?);`
-	result, err := db.Exec(sql, c.Path, c.ImageName, c.Size, c.Format)
+func InsertImageDB(db *sql.DB, img *Image) (int64, error) {
+	query := `INSERT INTO images (path, name, size, format,user_id) 
+            VALUES (?, ?, ?, ?,?);`
+	result, err := db.Exec(query, img.Path, img.ImageName, img.Size, img.Format, img.UserId)
 	if err != nil {
 		return 0, err
 	}
@@ -46,8 +58,8 @@ func InsertImageDB(db *sql.DB, c *Image) (int64, error) {
 }
 
 func UpdateImageDB(db *sql.DB, id int, path, size, name, format string) (int64, error) {
-	sql := `UPDATE images SET path = ?,name = ?, size = ?, format = ? WHERE id = ?;`
-	result, err := db.Exec(sql, path, name, size, format, id)
+	query := `UPDATE images SET path = ?,name = ?, size = ?, format = ? WHERE id = ?;`
+	result, err := db.Exec(query, path, name, size, format, id)
 	if err != nil {
 		return 0, err
 	}
@@ -55,8 +67,8 @@ func UpdateImageDB(db *sql.DB, id int, path, size, name, format string) (int64, 
 }
 
 func DeleteImageDB(db *sql.DB, id int) (int64, error) {
-	sql := `DELETE FROM images WHERE id = ?`
-	result, err := db.Exec(sql, id)
+	query := `DELETE FROM images WHERE id = ?`
+	result, err := db.Exec(query, id)
 	if err != nil {
 		return 0, err
 	}

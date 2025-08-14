@@ -6,6 +6,7 @@ func SetupRouters() *gin.Engine {
 	router := gin.Default()
 
 	SetupImageRoutes(router)
+	SetupUsersRouters(router)
 
 	return router
 }
